@@ -267,10 +267,10 @@ async function runPrompt() {
   }
 
   state.selectedId = state.plan.clips[0]?.id || null;
-  renderClips();
-  previewSelected();
   state.busy = false;
   els.newBtn.disabled = false;
+  renderClips();
+  previewSelected();
 }
 
 function renderClips() {
