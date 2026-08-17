@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { filenameForMime, isVideoFile, pickRecorderMime } from "../src/lib/files.js";
+import { describe, expect, it, vi } from "vitest";
+import { filenameForMime, isVideoFile, pickRecorderMime, saveClip } from "../src/lib/files.js";
 
 describe("mobile file helpers", () => {
   it("accepts camera-roll files with empty MIME but a video extension", () => {
@@ -19,5 +19,19 @@ describe("mobile file helpers", () => {
     const mime = pickRecorderMime((type) => type.includes("webm"));
     expect(mime).toContain("webm");
     expect(filenameForMime(mime)).toBe("maclips-vertical.webm");
+  });
+
+  it("rethrows when the user cancels the share sheet", async () => {
+    const blob = new Blob(["x"], { type: "video/webm" });
+    vi.stubGlobal("navigator", {
+      canShare: () => true,
+      share: async () => {
+        const error = new Error("canceled");
+        error.name = "AbortError";
+        throw error;
+      },
+    });
+    await expect(saveClip(blob, "maclips-vertical.webm")).rejects.toMatchObject({ name: "AbortError" });
+    vi.unstubAllGlobals();
   });
 });

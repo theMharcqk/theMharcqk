@@ -18,63 +18,87 @@ export async function exportClips({ video, clips, edits, onProgress }) {
   const canvas = document.createElement("canvas");
   canvas.width = VERTICAL.width;
   canvas.height = VERTICAL.height;
+  canvas.setAttribute("aria-hidden", "true");
+  Object.assign(canvas.style, {
+    position: "fixed",
+    left: "-9999px",
+    width: "1px",
+    height: "1px",
+    opacity: "0",
+    pointerEvents: "none",
+  });
+  document.body.appendChild(canvas);
+
   const ctx = canvas.getContext("2d", { alpha: false });
   const fps = 30;
   const speed = edits?.speed || 1;
   const captions = Boolean(edits?.captions);
-
-  const canvasStream = canvas.captureStream(fps);
+  const prevMuted = video.muted;
+  const prevRate = video.playbackRate;
   const audio = attachAudio(video);
-  const tracks = [...canvasStream.getVideoTracks()];
-  if (audio) tracks.push(...audio.stream.getAudioTracks());
 
-  const stream = new MediaStream(tracks);
-  const mimeType = pickMime();
-  let recorder;
   try {
-    recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
-  } catch {
-    recorder = new MediaRecorder(stream);
-  }
-  const chunks = [];
+    const canvasStream = canvas.captureStream(fps);
+    const tracks = [...canvasStream.getVideoTracks()];
+    if (audio) tracks.push(...audio.stream.getAudioTracks());
 
-  recorder.ondataavailable = (event) => {
-    if (event.data.size) chunks.push(event.data);
-  };
+    const stream = new MediaStream(tracks);
+    const mimeType = pickMime();
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
+    } catch {
+      recorder = new MediaRecorder(stream);
+    }
+    const chunks = [];
 
-  const stopped = new Promise((resolve, reject) => {
-    recorder.onstop = resolve;
-    recorder.onerror = () => reject(new Error("Export failed"));
-  });
+    recorder.ondataavailable = (event) => {
+      if (event.data.size) chunks.push(event.data);
+    };
 
-  recorder.start(250);
-  video.muted = Boolean(audio);
-  video.playbackRate = speed;
-
-  let done = 0;
-  const total = kept.reduce((sum, clip) => sum + clipDuration(clip), 0) || 1;
-
-  for (const clip of kept) {
-    await playClip(video, clip, speed, (now) => {
-      ctx.fillStyle = "#050505";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      drawCover(ctx, video, canvas.width, canvas.height);
-      if (captions) drawCaption(ctx, clip.title);
-      done = Math.min(total, done + (now || 0));
-      onProgress?.(Math.min(99, Math.round((done / total) * 100)));
+    const stopped = new Promise((resolve, reject) => {
+      recorder.onstop = resolve;
+      recorder.onerror = () => reject(new Error("Export failed"));
     });
+
+    audio?.silenceOutput?.();
+    video.muted = false;
+    video.playbackRate = speed;
+    recorder.start(250);
+
+    let done = 0;
+    const total = kept.reduce((sum, clip) => sum + clipDuration(clip), 0) || 1;
+
+    for (const clip of kept) {
+      await playClip(video, clip, speed, (now) => {
+        ctx.fillStyle = "#050505";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        drawCover(ctx, video, canvas.width, canvas.height);
+        if (captions) drawCaption(ctx, clip.title);
+        done = Math.min(total, done + (now || 0));
+        onProgress?.(Math.min(99, Math.round((done / total) * 100)));
+      });
+    }
+
+    video.pause();
+    recorder.stop();
+    await stopped;
+    onProgress?.(100);
+
+    canvasStream.getTracks().forEach((track) => track.stop());
+    stream.getTracks().forEach((track) => track.stop());
+
+    if (!chunks.length) {
+      throw new Error("Export produced an empty file. Try Chrome or Safari 18+.");
+    }
+
+    return new Blob(chunks, { type: recorder.mimeType || mimeType });
+  } finally {
+    canvas.remove();
+    audio?.restoreOutput?.();
+    video.muted = prevMuted;
+    video.playbackRate = prevRate;
   }
-
-  video.pause();
-  recorder.stop();
-  audio?.stop();
-  await stopped;
-  onProgress?.(100);
-
-  canvasStream.getTracks().forEach((track) => track.stop());
-  stream.getTracks().forEach((track) => track.stop());
-
-  return new Blob(chunks, { type: recorder.mimeType || mimeType });
 }
 
 function attachAudio(video) {
@@ -86,13 +110,21 @@ function attachAudio(video) {
     const ctx = new AudioContext();
     const source = ctx.createMediaElementSource(video);
     const dest = ctx.createMediaStreamDestination();
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
     source.connect(dest);
-    source.connect(ctx.destination);
+    source.connect(gain);
+    gain.connect(ctx.destination);
     void ctx.resume();
     video._maclipsAudio = {
       ctx,
       stream: dest.stream,
-      stop() {},
+      silenceOutput() {
+        gain.gain.value = 0;
+      },
+      restoreOutput() {
+        gain.gain.value = 1;
+      },
     };
     return video._maclipsAudio;
   } catch {
@@ -103,6 +135,7 @@ function attachAudio(video) {
 function playClip(video, clip, speed, onFrame) {
   return new Promise((resolve, reject) => {
     let raf = 0;
+    let started = false;
     let last = performance.now();
     const limit = Math.max(800, ((clip.end - clip.start) / Math.max(0.25, speed)) * 1000 + 1500);
     const watchdog = setTimeout(() => {
@@ -127,6 +160,8 @@ function playClip(video, clip, speed, onFrame) {
     };
 
     const startPlay = () => {
+      if (started) return;
+      started = true;
       video
         .play()
         .then(() => {
@@ -141,12 +176,11 @@ function playClip(video, clip, speed, onFrame) {
 
     video.pause();
     video.playbackRate = speed;
-    if (Math.abs(video.currentTime - clip.start) < 0.05) {
-      startPlay();
-      return;
-    }
     video.addEventListener("seeked", startPlay, { once: true });
     video.currentTime = clip.start;
+    if (Math.abs(video.currentTime - clip.start) < 0.05 && video.readyState >= 2) {
+      startPlay();
+    }
   });
 }
 

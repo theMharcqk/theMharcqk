@@ -6,6 +6,9 @@
   NODE_VERSION = "22"
   NODE_ENV = "production"
 
+# No SPA catch-all rewrite: this app only serves `/`, and a `/* -> index.html`
+# rule can swallow POST /api/suggest on some deploys.
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
@@ -44,8 +47,3 @@
   [headers.values]
     Content-Type = "application/manifest+json"
     Cache-Control = "no-cache"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200

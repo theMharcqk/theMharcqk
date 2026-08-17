@@ -1,4 +1,4 @@
-const CACHE = "maclips-shell-v1";
+const CACHE = "maclips-shell-v2";
 const PRECACHE = [
   "/",
   "/index.html",

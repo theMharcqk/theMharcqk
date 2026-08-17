@@ -1,9 +1,28 @@
 import { segmentsFromEnergy } from "./plan.js";
 
 const HOP = 0.05;
+export const MAX_ANALYZE_BYTES = 40 * 1024 * 1024;
+
+let sharedCtx = null;
+
+export function primeAudioContext() {
+  try {
+    if (!sharedCtx || sharedCtx.state === "closed") {
+      sharedCtx = new AudioContext();
+    }
+    return sharedCtx.resume();
+  } catch {
+    return Promise.resolve();
+  }
+}
+
+export function shouldDecodeAudio(file) {
+  const size = Number(file?.size) || 0;
+  return size > 0 && size <= MAX_ANALYZE_BYTES;
+}
 
 export async function analyzeVideo(file, videoEl) {
-  const duration = videoEl?.duration || 0;
+  const duration = Number.isFinite(videoEl?.duration) ? videoEl.duration : 0;
   const result = {
     duration,
     width: videoEl?.videoWidth || 0,
@@ -13,6 +32,11 @@ export async function analyzeVideo(file, videoEl) {
     peaks: [],
     talking: [],
   };
+
+  if (!shouldDecodeAudio(file)) {
+    result.peaks = evenlySpacedPeaks(duration, 5);
+    return result;
+  }
 
   try {
     const buffer = await decodeAudio(file);
@@ -27,16 +51,10 @@ export async function analyzeVideo(file, videoEl) {
 }
 
 async function decodeAudio(file) {
-  const ctx = new AudioContext();
+  await primeAudioContext();
+  const ctx = sharedCtx || new AudioContext();
   const data = await file.arrayBuffer();
-  try {
-    const buffer = await ctx.decodeAudioData(data.slice(0));
-    await ctx.close();
-    return buffer;
-  } catch (error) {
-    await ctx.close();
-    throw error;
-  }
+  return ctx.decodeAudioData(data.slice(0));
 }
 
 function rmsSamples(buffer, hopSec) {

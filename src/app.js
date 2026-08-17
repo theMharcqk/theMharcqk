@@ -1,4 +1,4 @@
-import { analyzeVideo } from "./lib/analyze.js";
+import { analyzeVideo, primeAudioContext } from "./lib/analyze.js";
 import { buildSuggestPayload } from "./lib/ai.js";
 import { exportClips } from "./lib/export.js";
 import { filenameForMime, isVideoFile, saveClip } from "./lib/files.js";
@@ -10,7 +10,7 @@ import {
   showInstallAction,
   withWakeLock,
 } from "./lib/phone.js";
-import { planClips } from "./lib/plan.js";
+import { normalizePlan, planClips } from "./lib/plan.js";
 import { PROMPT_CHIPS } from "./lib/prompt.js";
 import { clipDuration, formatTime, totalDuration } from "./lib/time.js";
 
@@ -38,6 +38,7 @@ const els = {
   installCopy: document.querySelector("#install-copy"),
   installBtn: document.querySelector("#install-btn"),
   installDismiss: document.querySelector("#install-dismiss"),
+  pickerStatus: document.querySelector("#picker-status"),
   trimWrap: document.querySelector("#trim-wrap"),
   inTime: document.querySelector("#in-time"),
   outTime: document.querySelector("#out-time"),
@@ -135,25 +136,33 @@ export function boot() {
 
 async function loadFile(file) {
   if (!isVideoFile(file)) {
-    setStatus("Choose a video from Photos.");
+    setPickerStatus("Choose a video from Photos.");
     return;
   }
 
+  const audioUnlock = primeAudioContext();
   if (state.url) URL.revokeObjectURL(state.url);
   state.file = file;
   state.url = URL.createObjectURL(file);
   state.plan = { clips: [], edits: { captions: false, speed: 1 }, summary: "" };
   state.selectedId = null;
+  state.analysis = null;
 
+  setPickerStatus("");
   els.dropzone.hidden = true;
   els.studio.hidden = false;
   els.dock.hidden = false;
   els.newBtn.hidden = false;
+  els.clips.innerHTML = "";
+  els.trimWrap.hidden = true;
   els.player.src = state.url;
+  els.player.muted = false;
+  els.player.playbackRate = 1;
   els.player.setAttribute("playsinline", "");
   els.player.setAttribute("webkit-playsinline", "");
   try {
     await waitForMeta(els.player);
+    await audioUnlock;
   } catch (error) {
     setStatus(error.message || "This phone can’t play that file. Try MP4.");
     return;
@@ -181,17 +190,20 @@ async function loadFile(file) {
 }
 
 function waitForMeta(video) {
-  if (video.readyState >= 1) return Promise.resolve();
+  const ready = () =>
+    video.readyState >= 1 && Number.isFinite(video.duration) && video.duration > 0;
+  if (ready()) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const fail = setTimeout(() => reject(new Error("Could not read that video.")), 20000);
-    video.addEventListener(
-      "loadedmetadata",
-      () => {
-        clearTimeout(fail);
-        resolve();
-      },
-      { once: true },
-    );
+    const succeed = () => {
+      if (!ready()) return;
+      clearTimeout(fail);
+      video.removeEventListener("loadedmetadata", succeed);
+      video.removeEventListener("durationchange", succeed);
+      resolve();
+    };
+    video.addEventListener("loadedmetadata", succeed);
+    video.addEventListener("durationchange", succeed);
     video.addEventListener(
       "error",
       () => {
@@ -234,8 +246,14 @@ async function runPrompt() {
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      state.plan = await res.json();
-      setStatus(`${state.plan.summary} · AI`);
+      const remote = normalizePlan(await res.json(), state.analysis.duration);
+      if (remote.clips.length) {
+        state.plan = remote;
+        setStatus(`${state.plan.summary} · AI`);
+      } else {
+        state.plan = local;
+        setStatus(`${local.summary} · on-device`);
+      }
     } else {
       state.plan = local;
       setStatus(`${local.summary} · on-device`);
@@ -312,8 +330,14 @@ function applyTrim() {
 
 function togglePlay() {
   if (els.player.paused) {
-    els.player.play();
-    els.playBtn.textContent = "Pause";
+    els.player
+      .play()
+      .then(() => {
+        els.playBtn.textContent = "Pause";
+      })
+      .catch(() => {
+        els.playBtn.textContent = "Play";
+      });
   } else {
     els.player.pause();
     els.playBtn.textContent = "Play";
@@ -452,6 +476,10 @@ function setExportEnabled(on) {
 
 function setStatus(text) {
   els.status.textContent = text;
+}
+
+function setPickerStatus(text) {
+  if (els.pickerStatus) els.pickerStatus.textContent = text;
 }
 
 function round1(n) {

@@ -20,9 +20,10 @@ export function filenameForMime(mime) {
   return /mp4/i.test(mime || "") ? "maclips-vertical.mp4" : "maclips-vertical.webm";
 }
 
-export function canShareFiles() {
+export function canShareFiles(file) {
   try {
-    const probe = new File(["x"], "probe.mp4", { type: "video/mp4" });
+    const probe =
+      file || new File(["x"], "probe.mp4", { type: "video/mp4" });
     return Boolean(navigator.canShare?.({ files: [probe] }));
   } catch {
     return false;
@@ -32,9 +33,13 @@ export function canShareFiles() {
 export async function saveClip(blob, name) {
   const type = blob.type || "video/webm";
   const file = new File([blob], name, { type });
-  if (canShareFiles()) {
-    await navigator.share({ files: [file], title: "MaClips clip" });
-    return "shared";
+  if (canShareFiles(file) && navigator.share) {
+    try {
+      await navigator.share({ files: [file], title: "MaClips clip" });
+      return "shared";
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+    }
   }
   downloadBlob(blob, name);
   return "downloaded";
