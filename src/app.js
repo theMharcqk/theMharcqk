@@ -1,6 +1,7 @@
 import { analyzeVideo } from "./lib/analyze.js";
 import { buildSuggestPayload } from "./lib/ai.js";
-import { downloadBlob, exportClips } from "./lib/export.js";
+import { exportClips } from "./lib/export.js";
+import { filenameForMime, isVideoFile, saveClip } from "./lib/files.js";
 import { planClips } from "./lib/plan.js";
 import { PROMPT_CHIPS } from "./lib/prompt.js";
 import { clipDuration, formatTime, totalDuration } from "./lib/time.js";
@@ -9,7 +10,9 @@ const els = {
   dropzone: document.querySelector("#dropzone"),
   studio: document.querySelector("#studio"),
   fileInput: document.querySelector("#file-input"),
+  cameraInput: document.querySelector("#camera-input"),
   pickBtn: document.querySelector("#pick-btn"),
+  cameraBtn: document.querySelector("#camera-btn"),
   player: document.querySelector("#player"),
   playBtn: document.querySelector("#play-btn"),
   clock: document.querySelector("#clock"),
@@ -20,6 +23,8 @@ const els = {
   status: document.querySelector("#status"),
   clips: document.querySelector("#clips"),
   exportBtn: document.querySelector("#export-btn"),
+  exportDock: document.querySelector("#export-dock"),
+  dock: document.querySelector("#dock"),
   trimWrap: document.querySelector("#trim-wrap"),
   inTime: document.querySelector("#in-time"),
   outTime: document.querySelector("#out-time"),
@@ -34,6 +39,8 @@ const state = {
   busy: false,
 };
 
+const isPhone = () => window.matchMedia("(pointer: coarse), (max-width: 840px)").matches;
+
 export function boot() {
   PROMPT_CHIPS.forEach((chip) => {
     const btn = document.createElement("button");
@@ -42,16 +49,19 @@ export function boot() {
     btn.textContent = chip.label;
     btn.addEventListener("click", () => {
       els.prompt.value = chip.prompt;
-      els.prompt.focus();
     });
     els.chips.append(btn);
   });
 
   els.pickBtn.addEventListener("click", () => els.fileInput.click());
-  els.fileInput.addEventListener("change", () => {
-    const file = els.fileInput.files?.[0];
+  els.cameraBtn.addEventListener("click", () => els.cameraInput.click());
+  const onPick = (input) => {
+    const file = input.files?.[0];
+    input.value = "";
     if (file) void loadFile(file);
-  });
+  };
+  els.fileInput.addEventListener("change", () => onPick(els.fileInput));
+  els.cameraInput.addEventListener("change", () => onPick(els.cameraInput));
 
   ["dragenter", "dragover"].forEach((type) => {
     els.dropzone.addEventListener(type, (event) => {
@@ -81,17 +91,19 @@ export function boot() {
 
   els.form.addEventListener("submit", (event) => {
     event.preventDefault();
+    els.prompt.blur();
     void runPrompt();
   });
 
   els.inTime.addEventListener("change", applyTrim);
   els.outTime.addEventListener("change", applyTrim);
   els.exportBtn.addEventListener("click", () => void runExport());
+  els.exportDock.addEventListener("click", () => void runExport());
 }
 
 async function loadFile(file) {
-  if (!file.type.startsWith("video/")) {
-    setStatus("That file is not a video.");
+  if (!isVideoFile(file)) {
+    setStatus("Choose a video from Photos.");
     return;
   }
 
@@ -103,32 +115,54 @@ async function loadFile(file) {
 
   els.dropzone.hidden = true;
   els.studio.hidden = false;
+  els.dock.hidden = false;
   els.player.src = state.url;
+  els.player.setAttribute("playsinline", "");
+  els.player.setAttribute("webkit-playsinline", "");
   await waitForMeta(els.player);
   els.scrub.max = String(els.player.duration || 0);
-  els.exportBtn.disabled = true;
-  setStatus("Reading energy in the take…");
-  els.prompt.focus();
+  setExportEnabled(false);
+  setStatus(
+    file.size > 80 * 1024 * 1024
+      ? "Large video — analysis may take a bit on phone."
+      : "Reading the take…",
+  );
 
   state.analysis = await analyzeVideo(file, els.player);
   const tall = state.analysis.height >= state.analysis.width;
   setStatus(
     tall
-      ? `${formatTime(state.analysis.duration)} vertical video ready. Tell me what to clip.`
-      : `${formatTime(state.analysis.duration)} loaded. I’ll crop to 9:16 on export.`,
+      ? `${formatTime(state.analysis.duration)} ready. Tell me what to clip.`
+      : `${formatTime(state.analysis.duration)} loaded. I’ll crop to 9:16.`,
   );
 }
 
 function waitForMeta(video) {
   if (video.readyState >= 1) return Promise.resolve();
-  return new Promise((resolve) => {
-    video.addEventListener("loadedmetadata", resolve, { once: true });
+  return new Promise((resolve, reject) => {
+    const fail = setTimeout(() => reject(new Error("Could not read that video.")), 20000);
+    video.addEventListener(
+      "loadedmetadata",
+      () => {
+        clearTimeout(fail);
+        resolve();
+      },
+      { once: true },
+    );
+    video.addEventListener(
+      "error",
+      () => {
+        clearTimeout(fail);
+        reject(new Error("This phone can’t play that file. Try MP4."));
+      },
+      { once: true },
+    );
   });
 }
 
 async function runPrompt() {
   if (!state.analysis) {
-    setStatus("Upload a video first.");
+    setStatus("Pick a video first.");
     return;
   }
   if (state.busy) return;
@@ -176,7 +210,7 @@ async function runPrompt() {
 function renderClips() {
   els.clips.innerHTML = "";
   const clips = state.plan.clips || [];
-  els.exportBtn.disabled = !clips.some((clip) => clip.keep);
+  setExportEnabled(clips.some((clip) => clip.keep));
   els.trimWrap.hidden = !state.selectedId;
 
   clips.forEach((clip) => {
@@ -215,8 +249,10 @@ function previewSelected() {
   const clip = state.plan.clips.find((item) => item.id === state.selectedId);
   if (!clip) return;
   els.player.currentTime = clip.start;
-  els.player.play().catch(() => {});
-  els.playBtn.textContent = "Pause";
+  if (!isPhone()) {
+    els.player.play().catch(() => {});
+    els.playBtn.textContent = "Pause";
+  }
 }
 
 function applyTrim() {
@@ -255,12 +291,23 @@ async function runExport() {
       edits: state.plan.edits,
       onProgress: (pct) => setStatus(`Exporting ${pct}%`),
     });
-    downloadBlob(blob, "maclips-vertical.webm");
-    setStatus(`Exported ${formatTime(totalDuration(state.plan.clips.filter((c) => c.keep)))} of 9:16 video`);
+    const name = filenameForMime(blob.type);
+    const how = await saveClip(blob, name);
+    const length = formatTime(totalDuration(state.plan.clips.filter((c) => c.keep)));
+    setStatus(how === "shared" ? `Share sheet · ${length} 9:16` : `Saved ${length} of 9:16 video`);
   } catch (error) {
-    setStatus(error.message || "Export failed");
+    if (error?.name === "AbortError") {
+      setStatus("Save canceled.");
+    } else {
+      setStatus(error.message || "Export failed");
+    }
   }
   state.busy = false;
+}
+
+function setExportEnabled(on) {
+  els.exportBtn.disabled = !on;
+  els.exportDock.disabled = !on;
 }
 
 function setStatus(text) {

@@ -10,33 +10,45 @@
   --danger: #ff6b6b;
   --radius: 18px;
   --font: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
 body {
   margin: 0;
   min-height: 100%;
+  min-height: 100dvh;
   background:
     radial-gradient(1200px 500px at 80% -10%, rgba(122, 92, 255, 0.18), transparent 50%),
     radial-gradient(900px 420px at 0% 100%, rgba(212, 255, 63, 0.08), transparent 45%),
     var(--bg);
   color: var(--text);
   font-family: var(--font);
+  color-scheme: dark;
 }
 
 button,
 input {
   font: inherit;
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px;
 }
 
 #app {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 20px 20px 64px;
+  padding: calc(16px + var(--safe-top)) 16px calc(28px + var(--safe-bottom));
 }
 
 .top {
@@ -44,7 +56,13 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 8px 0;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 .brand {
@@ -70,7 +88,8 @@ input {
 .btn {
   border: 0;
   border-radius: 999px;
-  padding: 10px 16px;
+  padding: 12px 18px;
+  min-height: 44px;
   background: #1b1e27;
   color: var(--text);
   cursor: pointer;
@@ -87,15 +106,22 @@ input {
   font-weight: 600;
 }
 
+.pick-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+
 .dropzone {
   display: grid;
   place-items: center;
-  min-height: calc(100dvh - 140px);
+  min-height: calc(100dvh - 140px - var(--safe-top) - var(--safe-bottom));
 }
 
 .drop-card {
   width: min(640px, 100%);
-  padding: 36px;
+  padding: 28px 20px;
   border: 1px dashed var(--line);
   border-radius: 28px;
   background: rgba(16, 18, 24, 0.72);
@@ -114,7 +140,7 @@ input {
 }
 
 h1 {
-  font-size: clamp(28px, 5vw, 48px);
+  font-size: clamp(26px, 8vw, 48px);
   line-height: 1.05;
   margin: 8px 0 12px;
 }
@@ -131,7 +157,8 @@ h1 {
 .studio {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+  padding-bottom: 72px;
 }
 
 .studio-body {
@@ -179,12 +206,14 @@ video {
   color: white;
   border: 0;
   border-radius: 999px;
-  padding: 8px 12px;
+  padding: 10px 14px;
+  min-height: 40px;
 }
 
 #scrub {
   width: 100%;
   margin-top: 12px;
+  height: 32px;
 }
 
 .prompt label,
@@ -212,9 +241,17 @@ video {
 
 .chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-top: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
 }
 
 .chip {
@@ -222,9 +259,11 @@ video {
   background: transparent;
   color: var(--text);
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 10px 12px;
+  min-height: 40px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .chip:hover,
@@ -292,7 +331,8 @@ video {
 .clip-actions button {
   border: 0;
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
+  min-height: 40px;
   background: #22252e;
   color: var(--text);
   cursor: pointer;
@@ -303,7 +343,15 @@ video {
   color: var(--lime-ink);
 }
 
+.dock {
+  display: none;
+}
+
 @media (max-width: 840px) {
+  .dock-hide {
+    display: none;
+  }
+
   .studio-body {
     grid-template-columns: 1fr;
   }
@@ -312,5 +360,31 @@ video {
     position: static;
     max-width: 220px;
     margin: 0 auto;
+  }
+
+  .phone {
+    width: min(220px, 56vw);
+  }
+
+  .dock {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    padding: 10px 16px calc(10px + var(--safe-bottom));
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(16px);
+  }
+
+  .dock .btn {
+    width: 100%;
+  }
+}
+
+@media (display-mode: standalone) {
+  #app {
+    padding-top: calc(8px + var(--safe-top));
   }
 }

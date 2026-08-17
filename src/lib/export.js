@@ -1,13 +1,14 @@
+import { pickRecorderMime } from "./files.js";
 import { VERTICAL, drawCover } from "./geometry.js";
 import { clipDuration } from "./time.js";
 
 function pickMime() {
-  const types = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm",
-  ];
-  return types.find((type) => MediaRecorder.isTypeSupported(type)) || "video/webm";
+  if (typeof MediaRecorder === "undefined" || !HTMLCanvasElement.prototype.captureStream) {
+    throw new Error("This browser can’t export video. Use Safari 18+ or Chrome on your phone.");
+  }
+  const mime = pickRecorderMime((type) => MediaRecorder.isTypeSupported(type));
+  if (!mime) throw new Error("No supported recorder format on this phone.");
+  return mime;
 }
 
 export async function exportClips({ video, clips, edits, onProgress }) {
@@ -29,7 +30,12 @@ export async function exportClips({ video, clips, edits, onProgress }) {
 
   const stream = new MediaStream(tracks);
   const mimeType = pickMime();
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 3_500_000 });
+  let recorder;
+  try {
+    recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
+  } catch {
+    recorder = new MediaRecorder(stream);
+  }
   const chunks = [];
 
   recorder.ondataavailable = (event) => {
@@ -68,18 +74,23 @@ export async function exportClips({ video, clips, edits, onProgress }) {
   canvasStream.getTracks().forEach((track) => track.stop());
   stream.getTracks().forEach((track) => track.stop());
 
-  return new Blob(chunks, { type: mimeType });
+  return new Blob(chunks, { type: recorder.mimeType || mimeType });
 }
 
 function attachAudio(video) {
-  if (video._maclipsAudio) return video._maclipsAudio;
+  if (video._maclipsAudio) {
+    video._maclipsAudio.ctx?.resume?.();
+    return video._maclipsAudio;
+  }
   try {
     const ctx = new AudioContext();
     const source = ctx.createMediaElementSource(video);
     const dest = ctx.createMediaStreamDestination();
     source.connect(dest);
     source.connect(ctx.destination);
+    void ctx.resume();
     video._maclipsAudio = {
+      ctx,
       stream: dest.stream,
       stop() {},
     };
@@ -174,11 +185,4 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   });
 }
 
-export function downloadBlob(blob, name = "maclips-clip.webm") {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
+export { filenameForMime } from "./files.js";

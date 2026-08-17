@@ -1,8 +1,8 @@
 # MaClips
 
-Personal vertical video clipping. Upload a take, say what to keep, export a 9:16 clip.
+Personal vertical video clipping for phone. Open the site, add it to your Home Screen, pick a take from Photos or record one, then say what to keep.
 
-Videos are clipped in the browser. The Netlify function only sees your prompt and timestamps.
+Clips stay on the device. The Netlify function only sees your prompt and timestamps.
 
 ## Local
 

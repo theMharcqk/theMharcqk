@@ -2,9 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MaClips — vertical AI clipping</title>
-    <meta name="description" content="Prompt-intelligent vertical video clipping. Upload, say what you want, export." />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+    />
+    <title>MaClips</title>
+    <meta name="description" content="Clip vertical videos on your phone. Prompt, keep, export." />
+    <meta name="theme-color" content="#07080c" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MaClips" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/icon-192.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -17,20 +29,24 @@
           <span class="mark" aria-hidden="true"></span>
           <div>
             <strong>MaClips</strong>
-            <p>Vertical clips, in one prompt</p>
+            <p>Vertical clips on your phone</p>
           </div>
         </div>
-        <button id="export-btn" class="btn primary" type="button" disabled>Export</button>
+        <button id="export-btn" class="btn primary dock-hide" type="button" disabled>Save clip</button>
       </header>
 
       <section id="dropzone" class="dropzone">
-        <input id="file-input" type="file" accept="video/*" hidden />
+        <input id="file-input" type="file" accept="video/*,.mp4,.mov,.m4v,.webm" hidden />
+        <input id="camera-input" type="file" accept="video/*" capture="environment" hidden />
         <div class="drop-card">
-          <p class="kicker">Personal clipping studio</p>
-          <h1>Drop a vertical video.<br />Tell it what to keep.</h1>
-          <p class="lede">Clips stay on your device. AI only reads timestamps and your prompt.</p>
-          <button id="pick-btn" class="btn primary" type="button">Upload video</button>
-          <p class="hint">MP4, MOV, or WebM · 9:16 preferred · processed locally</p>
+          <p class="kicker">Phone studio</p>
+          <h1>Pick a vertical video.<br />Tell it what to keep.</h1>
+          <p class="lede">Runs on your phone. The file never uploads.</p>
+          <div class="pick-row">
+            <button id="pick-btn" class="btn primary" type="button">Photos</button>
+            <button id="camera-btn" class="btn" type="button">Record</button>
+          </div>
+          <p class="hint">Camera roll or record · 9:16 · Add to Home Screen for the app</p>
         </div>
       </section>
 
@@ -43,7 +59,9 @@
                 id="prompt-input"
                 name="prompt"
                 autocomplete="off"
-                placeholder="15s hook from the start, cut silence, 3 best moments…"
+                enterkeyhint="go"
+                inputmode="text"
+                placeholder="15s hook, cut silence, best moments…"
               />
               <button class="btn primary" type="submit">Clip</button>
             </div>
@@ -54,7 +72,7 @@
         <div class="studio-body">
           <aside class="stage">
             <div class="phone">
-              <video id="player" playsinline preload="auto"></video>
+              <video id="player" playsinline webkit-playsinline preload="metadata" controlslist="nodownload noplaybackrate"></video>
               <div class="phone-ui">
                 <span id="clock">0:00</span>
                 <button id="play-btn" type="button" aria-label="Play">Play</button>
@@ -67,14 +85,18 @@
             <p id="status" class="status" role="status"></p>
 
             <div class="trim" hidden id="trim-wrap">
-              <label>In <input id="in-time" type="number" min="0" step="0.1" /></label>
-              <label>Out <input id="out-time" type="number" min="0" step="0.1" /></label>
+              <label>In <input id="in-time" type="number" min="0" step="0.1" inputmode="decimal" /></label>
+              <label>Out <input id="out-time" type="number" min="0" step="0.1" inputmode="decimal" /></label>
             </div>
 
             <ol id="clips" class="clips"></ol>
           </section>
         </div>
       </main>
+
+      <div id="dock" class="dock" hidden>
+        <button id="export-dock" class="btn primary" type="button" disabled>Save clip</button>
+      </div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>
