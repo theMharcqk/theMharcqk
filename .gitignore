@@ -1,0 +1,9 @@
+node_modules
+dist
+.netlify
+*.log
+.DS_Store
+coverage
+test-results
+playwright-report
+public/sample.mp4
