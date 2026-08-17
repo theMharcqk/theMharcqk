@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, interactive-widget=resizes-content"
     />
     <title>MaClips</title>
     <meta name="description" content="Clip vertical videos on your phone. Prompt, keep, export." />
@@ -32,7 +32,10 @@
             <p>Vertical clips on your phone</p>
           </div>
         </div>
-        <button id="export-btn" class="btn primary dock-hide" type="button" disabled>Save clip</button>
+        <div class="top-actions">
+          <button id="new-btn" class="btn" type="button" hidden>New video</button>
+          <button id="export-btn" class="btn primary dock-hide" type="button" disabled>Save clip</button>
+        </div>
       </header>
 
       <section id="dropzone" class="dropzone">
@@ -46,8 +49,15 @@
             <button id="pick-btn" class="btn primary" type="button">Photos</button>
             <button id="camera-btn" class="btn" type="button">Record</button>
           </div>
-          <p class="hint">Camera roll or record · 9:16 · Add to Home Screen for the app</p>
+          <p class="hint">Camera roll or record · 9:16 · Safari 18+ or Chrome</p>
         </div>
+        <aside id="install-hint" class="install-hint" hidden>
+          <p id="install-copy"></p>
+          <div class="install-actions">
+            <button id="install-btn" class="btn primary" type="button" hidden>Install</button>
+            <button id="install-dismiss" class="btn" type="button">Not now</button>
+          </div>
+        </aside>
       </section>
 
       <main id="studio" class="studio" hidden>
@@ -62,6 +72,9 @@
                 enterkeyhint="go"
                 inputmode="text"
                 placeholder="15s hook, cut silence, best moments…"
+                autocapitalize="sentences"
+                autocorrect="on"
+                spellcheck="true"
               />
               <button class="btn primary" type="submit">Clip</button>
             </div>

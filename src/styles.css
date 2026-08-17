@@ -24,6 +24,7 @@ body {
   margin: 0;
   min-height: 100%;
   min-height: 100dvh;
+  overscroll-behavior: none;
   background:
     radial-gradient(1200px 500px at 80% -10%, rgba(122, 92, 255, 0.18), transparent 50%),
     radial-gradient(900px 420px at 0% 100%, rgba(212, 255, 63, 0.08), transparent 45%),
@@ -63,6 +64,13 @@ select {
   padding: 8px 0;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(12px);
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -114,8 +122,10 @@ select {
 }
 
 .dropzone {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-height: calc(100dvh - 140px - var(--safe-top) - var(--safe-bottom));
 }
 
@@ -148,6 +158,31 @@ h1 {
 .lede,
 .hint {
   color: var(--muted);
+}
+
+.install-hint {
+  width: min(640px, 100%);
+  margin: 16px auto 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(16, 18, 24, 0.9);
+}
+
+.install-hint p {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.install-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.install-actions .btn {
+  flex: 1;
 }
 
 [hidden] {
@@ -190,6 +225,7 @@ video {
   height: 100%;
   object-fit: cover;
   background: #000;
+  -webkit-touch-callout: none;
 }
 
 .phone-ui {
@@ -376,15 +412,34 @@ video {
     padding: 10px 16px calc(10px + var(--safe-bottom));
     background: color-mix(in srgb, var(--bg) 92%, transparent);
     backdrop-filter: blur(16px);
+    transition: transform 0.2s ease;
   }
 
   .dock .btn {
     width: 100%;
+  }
+
+  .dock.tucked {
+    transform: translateY(110%);
+    pointer-events: none;
+  }
+
+  .keyboard-open .studio {
+    padding-bottom: 16px;
+  }
+
+  #new-btn {
+    padding: 10px 14px;
+    font-size: 14px;
   }
 }
 
 @media (display-mode: standalone) {
   #app {
     padding-top: calc(8px + var(--safe-top));
+  }
+
+  .install-hint {
+    display: none !important;
   }
 }

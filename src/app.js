@@ -2,6 +2,14 @@ import { analyzeVideo } from "./lib/analyze.js";
 import { buildSuggestPayload } from "./lib/ai.js";
 import { exportClips } from "./lib/export.js";
 import { filenameForMime, isVideoFile, saveClip } from "./lib/files.js";
+import {
+  installHintMode,
+  installHintText,
+  readPhoneEnv,
+  shouldShowInstallHint,
+  showInstallAction,
+  withWakeLock,
+} from "./lib/phone.js";
 import { planClips } from "./lib/plan.js";
 import { PROMPT_CHIPS } from "./lib/prompt.js";
 import { clipDuration, formatTime, totalDuration } from "./lib/time.js";
@@ -25,6 +33,11 @@ const els = {
   exportBtn: document.querySelector("#export-btn"),
   exportDock: document.querySelector("#export-dock"),
   dock: document.querySelector("#dock"),
+  newBtn: document.querySelector("#new-btn"),
+  installHint: document.querySelector("#install-hint"),
+  installCopy: document.querySelector("#install-copy"),
+  installBtn: document.querySelector("#install-btn"),
+  installDismiss: document.querySelector("#install-dismiss"),
   trimWrap: document.querySelector("#trim-wrap"),
   inTime: document.querySelector("#in-time"),
   outTime: document.querySelector("#out-time"),
@@ -99,6 +112,17 @@ export function boot() {
   els.outTime.addEventListener("change", applyTrim);
   els.exportBtn.addEventListener("click", () => void runExport());
   els.exportDock.addEventListener("click", () => void runExport());
+  els.newBtn.addEventListener("click", resetToPicker);
+  els.prompt.addEventListener("focus", () => els.dock.classList.add("tucked"));
+  els.prompt.addEventListener("blur", () => els.dock.classList.remove("tucked"));
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && !state.busy) {
+      els.player.pause();
+      els.playBtn.textContent = "Play";
+    }
+  });
+  watchKeyboard();
+  bootInstallHint();
 }
 
 async function loadFile(file) {
@@ -116,10 +140,16 @@ async function loadFile(file) {
   els.dropzone.hidden = true;
   els.studio.hidden = false;
   els.dock.hidden = false;
+  els.newBtn.hidden = false;
   els.player.src = state.url;
   els.player.setAttribute("playsinline", "");
   els.player.setAttribute("webkit-playsinline", "");
-  await waitForMeta(els.player);
+  try {
+    await waitForMeta(els.player);
+  } catch (error) {
+    setStatus(error.message || "This phone can’t play that file. Try MP4.");
+    return;
+  }
   els.scrub.max = String(els.player.duration || 0);
   setExportEnabled(false);
   setStatus(
@@ -128,7 +158,12 @@ async function loadFile(file) {
       : "Reading the take…",
   );
 
-  state.analysis = await analyzeVideo(file, els.player);
+  try {
+    state.analysis = await analyzeVideo(file, els.player);
+  } catch {
+    setStatus("Could not analyze that video on this phone.");
+    return;
+  }
   const tall = state.analysis.height >= state.analysis.width;
   setStatus(
     tall
@@ -167,6 +202,7 @@ async function runPrompt() {
   }
   if (state.busy) return;
   state.busy = true;
+  els.newBtn.disabled = true;
   setStatus("Planning clips…");
 
   const local = planClips({
@@ -205,6 +241,7 @@ async function runPrompt() {
   renderClips();
   previewSelected();
   state.busy = false;
+  els.newBtn.disabled = false;
 }
 
 function renderClips() {
@@ -283,14 +320,22 @@ function syncClock() {
 async function runExport() {
   if (state.busy) return;
   state.busy = true;
+  els.newBtn.disabled = true;
+  setExportEnabled(false);
+  setSaveLabel("Exporting…");
   setStatus("Exporting vertical clip…");
   try {
-    const blob = await exportClips({
-      video: els.player,
-      clips: state.plan.clips,
-      edits: state.plan.edits,
-      onProgress: (pct) => setStatus(`Exporting ${pct}%`),
-    });
+    const blob = await withWakeLock(() =>
+      exportClips({
+        video: els.player,
+        clips: state.plan.clips,
+        edits: state.plan.edits,
+        onProgress: (pct) => {
+          setStatus(`Exporting ${pct}%`);
+          setSaveLabel(`Exporting ${pct}%`);
+        },
+      }),
+    );
     const name = filenameForMime(blob.type);
     const how = await saveClip(blob, name);
     const length = formatTime(totalDuration(state.plan.clips.filter((c) => c.keep)));
@@ -303,11 +348,98 @@ async function runExport() {
     }
   }
   state.busy = false;
+  els.newBtn.disabled = false;
+  setSaveLabel("Save clip");
+  setExportEnabled((state.plan.clips || []).some((clip) => clip.keep));
+}
+
+function resetToPicker() {
+  if (state.busy) return;
+  if (state.url) URL.revokeObjectURL(state.url);
+  state.file = null;
+  state.url = null;
+  state.analysis = null;
+  state.plan = { clips: [], edits: { captions: false, speed: 1 }, summary: "" };
+  state.selectedId = null;
+  els.player.removeAttribute("src");
+  els.player.load();
+  els.dropzone.hidden = false;
+  els.studio.hidden = true;
+  els.dock.hidden = true;
+  els.newBtn.hidden = true;
+  els.clips.innerHTML = "";
+  els.trimWrap.hidden = true;
+  els.prompt.value = "";
+  setSaveLabel("Save clip");
+  setExportEnabled(false);
+  setStatus("");
+}
+
+function bootInstallHint() {
+  const hint = els.installHint;
+  if (!hint) return;
+
+  const dismissed = localStorage.getItem("maclips.installHint") === "1";
+  const env = readPhoneEnv(window);
+  if (!shouldShowInstallHint(env, { dismissed })) return;
+
+  let deferredPrompt = null;
+  const paint = (canPrompt) => {
+    const mode = installHintMode({ ua: env.ua, canPrompt });
+    if (mode === "hidden") {
+      hint.hidden = true;
+      return;
+    }
+    els.installCopy.textContent = installHintText(mode);
+    els.installBtn.hidden = !showInstallAction(mode);
+    hint.hidden = false;
+  };
+
+  paint(false);
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredPrompt = event;
+    paint(true);
+  });
+  window.addEventListener("appinstalled", () => {
+    hint.hidden = true;
+    localStorage.setItem("maclips.installHint", "1");
+  });
+
+  els.installBtn.addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice.catch(() => {});
+    deferredPrompt = null;
+    hint.hidden = true;
+    localStorage.setItem("maclips.installHint", "1");
+  });
+  els.installDismiss.addEventListener("click", () => {
+    hint.hidden = true;
+    localStorage.setItem("maclips.installHint", "1");
+  });
+}
+
+function watchKeyboard() {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  const sync = () => {
+    const covered = window.innerHeight - viewport.height > 120;
+    els.dock.classList.toggle("tucked", covered);
+    document.body.classList.toggle("keyboard-open", covered);
+  };
+  viewport.addEventListener("resize", sync);
+  viewport.addEventListener("scroll", sync);
+}
+
+function setSaveLabel(text) {
+  els.exportBtn.textContent = text;
+  els.exportDock.textContent = text;
 }
 
 function setExportEnabled(on) {
-  els.exportBtn.disabled = !on;
-  els.exportDock.disabled = !on;
+  els.exportBtn.disabled = !on || state.busy;
+  els.exportDock.disabled = !on || state.busy;
 }
 
 function setStatus(text) {

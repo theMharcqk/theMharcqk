@@ -2,12 +2,17 @@
   "name": "MaClips",
   "short_name": "MaClips",
   "description": "Clip vertical videos on your phone. Prompt, keep, export.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
+  "lang": "en",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "portrait",
   "background_color": "#07080c",
   "theme_color": "#07080c",
+  "categories": ["photo", "video", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
