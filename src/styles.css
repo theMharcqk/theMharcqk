@@ -403,7 +403,8 @@ video {
   }
 
   .dock {
-    display: block;
+    display: grid;
+    gap: 8px;
     position: fixed;
     left: 0;
     right: 0;
@@ -453,7 +454,8 @@ html.is-phone .phone {
 }
 
 html.is-phone .dock {
-  display: block;
+  display: grid;
+  gap: 8px;
   position: fixed;
   left: 0;
   right: 0;

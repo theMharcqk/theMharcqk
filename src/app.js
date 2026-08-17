@@ -32,6 +32,8 @@ const els = {
   clips: document.querySelector("#clips"),
   exportBtn: document.querySelector("#export-btn"),
   exportDock: document.querySelector("#export-dock"),
+  downloadLink: document.querySelector("#download-link"),
+  downloadDock: document.querySelector("#download-dock"),
   dock: document.querySelector("#dock"),
   newBtn: document.querySelector("#new-btn"),
   installHint: document.querySelector("#install-hint"),
@@ -51,6 +53,7 @@ const state = {
   plan: { clips: [], edits: { captions: false, speed: 1 }, summary: "" },
   selectedId: null,
   busy: false,
+  downloadUrl: null,
 };
 
 const isPhone = () =>
@@ -369,9 +372,18 @@ async function runExport() {
       }),
     );
     const name = filenameForMime(blob.type);
-    const how = await saveClip(blob, name);
+    offerDownload(blob, name);
+    let how = "downloaded";
+    try {
+      how = await saveClip(blob, name);
+    } catch (error) {
+      if (error?.name !== "AbortError") throw error;
+      how = "canceled";
+    }
     const length = formatTime(totalDuration(state.plan.clips.filter((c) => c.keep)));
-    setStatus(how === "shared" ? `Share sheet · ${length} 9:16` : `Saved ${length} of 9:16 video`);
+    const where =
+      how === "shared" ? "Share sheet" : how === "canceled" ? "Save canceled" : "File ready";
+    setStatus(`${where} · ${length} 9:16. Tap Download if it didn’t appear.`);
   } catch (error) {
     if (error?.name === "AbortError") {
       setStatus("Save canceled.");
@@ -402,6 +414,7 @@ function resetToPicker() {
   els.clips.innerHTML = "";
   els.trimWrap.hidden = true;
   els.prompt.value = "";
+  hideDownload();
   setSaveLabel("Save clip");
   setExportEnabled(false);
   setStatus("");
@@ -467,6 +480,29 @@ function watchKeyboard() {
 function setSaveLabel(text) {
   els.exportBtn.textContent = text;
   els.exportDock.textContent = text;
+}
+
+function offerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  if (state.downloadUrl) URL.revokeObjectURL(state.downloadUrl);
+  state.downloadUrl = url;
+  [els.downloadLink, els.downloadDock].forEach((link) => {
+    if (!link) return;
+    link.href = url;
+    link.download = name;
+    link.hidden = false;
+    link.textContent = "Download";
+  });
+}
+
+function hideDownload() {
+  if (state.downloadUrl) URL.revokeObjectURL(state.downloadUrl);
+  state.downloadUrl = null;
+  [els.downloadLink, els.downloadDock].forEach((link) => {
+    if (!link) return;
+    link.hidden = true;
+    link.removeAttribute("href");
+  });
 }
 
 function setExportEnabled(on) {
