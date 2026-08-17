@@ -383,7 +383,7 @@ video {
   display: none;
 }
 
-@media (max-width: 840px) {
+@media (max-width: 840px), (hover: none) and (pointer: coarse) {
   .dock-hide {
     display: none;
   }
@@ -432,6 +432,46 @@ video {
     padding: 10px 14px;
     font-size: 14px;
   }
+}
+
+html.is-phone .dock-hide {
+  display: none;
+}
+
+html.is-phone .studio-body {
+  grid-template-columns: 1fr;
+}
+
+html.is-phone .stage {
+  position: static;
+  max-width: 220px;
+  margin: 0 auto;
+}
+
+html.is-phone .phone {
+  width: min(220px, 56vw);
+}
+
+html.is-phone .dock {
+  display: block;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  padding: 10px 16px calc(10px + var(--safe-bottom));
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(16px);
+  transition: transform 0.2s ease;
+}
+
+html.is-phone .dock .btn {
+  width: 100%;
+}
+
+html.is-phone .dock.tucked {
+  transform: translateY(110%);
+  pointer-events: none;
 }
 
 @media (display-mode: standalone) {

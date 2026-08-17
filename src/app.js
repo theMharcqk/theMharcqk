@@ -52,7 +52,12 @@ const state = {
   busy: false,
 };
 
-const isPhone = () => window.matchMedia("(pointer: coarse), (max-width: 840px)").matches;
+const isPhone = () =>
+  window.matchMedia("(max-width: 840px), (hover: none) and (pointer: coarse)").matches;
+
+function syncPhoneChrome() {
+  document.documentElement.classList.toggle("is-phone", isPhone());
+}
 
 export function boot() {
   PROMPT_CHIPS.forEach((chip) => {
@@ -123,6 +128,9 @@ export function boot() {
   });
   watchKeyboard();
   bootInstallHint();
+  syncPhoneChrome();
+  window.addEventListener("resize", syncPhoneChrome);
+  window.addEventListener("orientationchange", syncPhoneChrome);
 }
 
 async function loadFile(file) {
