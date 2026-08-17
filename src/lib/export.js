@@ -93,31 +93,48 @@ function playClip(video, clip, speed, onFrame) {
   return new Promise((resolve, reject) => {
     let raf = 0;
     let last = performance.now();
+    const limit = Math.max(800, ((clip.end - clip.start) / Math.max(0.25, speed)) * 1000 + 1500);
+    const watchdog = setTimeout(() => {
+      cancelAnimationFrame(raf);
+      resolve();
+    }, limit);
+
+    const finish = () => {
+      clearTimeout(watchdog);
+      cancelAnimationFrame(raf);
+      resolve();
+    };
 
     const tick = (now) => {
       onFrame?.((now - last) / 1000);
       last = now;
-      if (video.currentTime >= clip.end - 0.02) {
-        cancelAnimationFrame(raf);
-        resolve();
+      if (video.currentTime >= clip.end - 0.04 || video.ended) {
+        finish();
         return;
       }
       raf = requestAnimationFrame(tick);
     };
 
-    const onSeeked = () => {
-      video.removeEventListener("seeked", onSeeked);
+    const startPlay = () => {
       video
         .play()
         .then(() => {
+          last = performance.now();
           raf = requestAnimationFrame(tick);
         })
-        .catch(reject);
+        .catch((error) => {
+          clearTimeout(watchdog);
+          reject(error);
+        });
     };
 
     video.pause();
     video.playbackRate = speed;
-    video.addEventListener("seeked", onSeeked);
+    if (Math.abs(video.currentTime - clip.start) < 0.05) {
+      startPlay();
+      return;
+    }
+    video.addEventListener("seeked", startPlay, { once: true });
     video.currentTime = clip.start;
   });
 }

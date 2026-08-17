@@ -124,10 +124,20 @@ h1 {
   color: var(--muted);
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .studio {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.studio-body {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 28px;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 24px;
   align-items: start;
 }
 
@@ -138,7 +148,8 @@ h1 {
 
 .phone {
   position: relative;
-  width: 100%;
+  width: min(100%, 260px);
+  margin: 0 auto;
   aspect-ratio: 9 / 16;
   border-radius: 28px;
   overflow: hidden;
@@ -293,13 +304,13 @@ video {
 }
 
 @media (max-width: 840px) {
-  .studio {
+  .studio-body {
     grid-template-columns: 1fr;
   }
 
   .stage {
     position: static;
-    max-width: 320px;
+    max-width: 220px;
     margin: 0 auto;
   }
 }

@@ -73,6 +73,6 @@ export const PROMPT_CHIPS = [
   { label: "15s hook", prompt: "15 second hook from the start" },
   { label: "Cut silence", prompt: "cut silence and keep talking" },
   { label: "Best moments", prompt: "3 highlight clips of the best moments" },
-  { label: "Captions", prompt: "best 20 seconds with captions" },
+  { label: "Captions", prompt: "20 seconds with captions" },
   { label: "Ending", prompt: "12 second clip from the end" },
 ];
